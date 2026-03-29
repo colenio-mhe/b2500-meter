@@ -1,0 +1,9 @@
+log_level: info
+providers:
+  - type: tasmota
+    ip: 192.168.178.6
+    status: StatusSNS
+    payload: SML
+    label: Power
+    calculate: false
+    throttle: 0
