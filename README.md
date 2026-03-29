@@ -34,7 +34,7 @@ The easiest way to run the emulator is using Docker.
       -p 1010:1010/udp \
       -p 2220:2220/udp \
       -v $(pwd)/config.yaml:/app/config.yaml \
-      ghcr.io/colenio-mhe/b2500-meter-go:main
+      ghcr.io/colenio-mhe/b2500-meter-go:latest
     ```
 
 The Marstek battery will now find the emulated Shelly on your network. Make sure the battery is in **"Auto"** mode.

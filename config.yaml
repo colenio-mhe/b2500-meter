@@ -6,4 +6,4 @@ providers:
     payload: SML
     label: Power
     calculate: false
-    throttle: 0
+    throttle: 2.0

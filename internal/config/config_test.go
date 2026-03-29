@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -16,20 +17,12 @@ providers:
   - type: mock
     power: 123.4
 `
-	tmpfile, err := os.CreateTemp("", "config*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpfile.Name())
-
-	if _, err := tmpfile.Write([]byte(yamlContent)); err != nil {
-		t.Fatal(err)
-	}
-	if err := tmpfile.Close(); err != nil {
+	tmpfile := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(tmpfile, []byte(yamlContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	cfg, err := Load(tmpfile.Name())
+	cfg, err := Load(tmpfile)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
