@@ -14,6 +14,8 @@ providers:
     status: StatusSNS
     payload: SML
     label: Power
+    throttle: 2.5
+    stale_timeout: 15.5
   - type: mock
     power: 123.4
   - type: mqtt
@@ -37,7 +39,7 @@ providers:
 	}
 
 	p1 := cfg.Providers[0]
-	if p1.Type != "tasmota" || p1.IP != "1.2.3.4" || p1.Status != "StatusSNS" {
+	if p1.Type != "tasmota" || p1.IP != "1.2.3.4" || p1.Status != "StatusSNS" || p1.Throttle != 2.5 || p1.StaleTimeout != 15.5 {
 		t.Errorf("p1 mismatch: %+v", p1)
 	}
 

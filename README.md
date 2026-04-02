@@ -52,6 +52,10 @@ The `config.yaml` file supports the following options:
 - `device`: The type of device to emulate (currently only `shellypro3em` is supported).
 - `device_id`: The source ID reported in JSON-RPC responses.
 
+#### Common Provider Options
+- `throttle`: Minimum interval (in seconds) between fetches from the device. Calls within this interval return the last cached value instantly.
+- `stale_timeout`: (Optional) Maximum age (in seconds) of the cached value. If the provider fails to fetch new data for longer than this period, it will return 0W. Defaults to `10.0` if `throttle` is enabled.
+
 #### Provider Options (Tasmota)
 - `ip`: IP address of the Tasmota device.
 - `user`/`password`: (Optional) For HTTP authentication.
@@ -61,7 +65,6 @@ The `config.yaml` file supports the following options:
 - `calculate`: If `true`, calculates net power using `label_in` and `label_out`.
 - `label_in`: JSON key for imported power (required if `calculate: true`).
 - `label_out`: JSON key for exported power (required if `calculate: true`).
-- `throttle`: Minimum interval (in seconds) between fetches from the device. Calls within this interval return the last cached value instantly.
 
 #### Provider Options (Mock)
 - `power`: Static power value in Watts.

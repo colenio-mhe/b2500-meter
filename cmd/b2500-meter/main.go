@@ -27,11 +27,11 @@ func main() {
 
 	setupLogging(cfg.LogLevel)
 
-	multiProvider := setupProviders(cfg)
-	handler := setupHandler(cfg)
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	multiProvider := setupProviders(ctx, cfg)
+	handler := setupHandler(cfg)
 
 	startServers(ctx, handler, multiProvider)
 
@@ -60,7 +60,7 @@ func setupLogging(level string) {
 	slog.SetDefault(slog.New(handler))
 }
 
-func setupProviders(cfg config.Config) provider.PowerProvider {
+func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvider {
 	var providers []provider.PowerProvider
 
 	if len(cfg.Providers) > 0 {
@@ -109,8 +109,12 @@ func setupProviders(cfg config.Config) provider.PowerProvider {
 
 			if pc.Throttle > 0 {
 				interval := time.Duration(pc.Throttle * float64(time.Second))
-				p = provider.NewThrottledProvider(p, interval)
-				slog.Info("Throttling enabled", "interval", pc.Throttle)
+				staleTimeout := time.Duration(pc.StaleTimeout * float64(time.Second))
+				if staleTimeout == 0 {
+					staleTimeout = 10 * time.Second
+				}
+				p = provider.NewThrottledProvider(ctx, p, interval, staleTimeout)
+				slog.Info("Throttling enabled", "interval", pc.Throttle, "stale_timeout", staleTimeout)
 			}
 			providers = append(providers, p)
 		}
