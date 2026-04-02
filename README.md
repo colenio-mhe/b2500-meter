@@ -65,6 +65,9 @@ The `config.yaml` file supports the following options:
 - `calculate`: If `true`, calculates net power using `label_in` and `label_out`.
 - `label_in`: JSON key for imported power (required if `calculate: true`).
 - `label_out`: JSON key for exported power (required if `calculate: true`).
+- `json_path`: (Optional) [GJSON path](https://github.com/tidwall/gjson) to extract the power value. Overrides `status`, `payload`, and `label`.
+- `json_path_in`: (Optional) GJSON path for imported power. Overrides `status`, `payload`, and `label_in`.
+- `json_path_out`: (Optional) GJSON path for exported power. Overrides `status`, `payload`, and `label_out`.
 
 #### Provider Options (Mock)
 - `power`: Static power value in Watts.

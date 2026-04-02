@@ -35,6 +35,8 @@ type ProviderConfig struct {
 	Port         int     `yaml:"port"`
 	Topic        string  `yaml:"topic"`
 	JsonPath     string  `yaml:"json_path"`
+	JsonPathIn   string  `yaml:"json_path_in"`
+	JsonPathOut  string  `yaml:"json_path_out"`
 }
 
 // Load reads and parses the YAML configuration file at the given path.

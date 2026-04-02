@@ -77,6 +77,9 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 					pc.Label,
 					pc.LabelIn,
 					pc.LabelOut,
+					pc.JsonPath,
+					pc.JsonPathIn,
+					pc.JsonPathOut,
 					pc.Calculate,
 				)
 				slog.Info("Added Tasmota provider", "ip", pc.IP)

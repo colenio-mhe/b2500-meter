@@ -33,8 +33,8 @@ func NewThrottledProvider(ctx context.Context, wrapped PowerProvider, throttleIn
 	}
 
 	// Initial fetch
-	t.fetch()
 	if throttleInterval > 0 {
+		t.fetch()
 		go t.run(ctx)
 	}
 

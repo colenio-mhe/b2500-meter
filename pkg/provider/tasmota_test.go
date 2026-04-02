@@ -63,6 +63,7 @@ func TestTasmotaProvider_GetPower(t *testing.T) {
 				"Power",
 				"PowerIn",
 				"PowerOut",
+				"", "", "", // no custom paths
 				tt.jsonPowerCalculate,
 			)
 
@@ -104,6 +105,7 @@ func TestTasmotaProvider_Auth(t *testing.T) {
 		"Power",
 		"PowerIn",
 		"PowerOut",
+		"", "", "", // no custom paths
 		false,
 	)
 
@@ -114,4 +116,56 @@ func TestTasmotaProvider_Auth(t *testing.T) {
 	if total != 456 {
 		t.Errorf("expected total power 456, got %v", total)
 	}
+}
+
+func TestTasmotaProvider_JsonPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Respond with a complex/non-standard JSON structure
+		resp := `{
+			"StatusSNS": {
+				"Meter": {
+					"Power": 789.5
+				},
+				"In": "100.2",
+				"Out": "50.1"
+			}
+		}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	ipPort := strings.TrimPrefix(server.URL, "http://")
+
+	t.Run("Custom JSON path single", func(t *testing.T) {
+		p := NewTasmotaProvider(
+			ipPort, "", "",
+			"", "", "", "", "", // Ignore standard fields
+			"StatusSNS.Meter.Power", "", "",
+			false,
+		)
+		_, _, _, total, err := p.GetPower()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total != 789.5 {
+			t.Errorf("expected 789.5, got %v", total)
+		}
+	})
+
+	t.Run("Custom JSON path calculated (with string values)", func(t *testing.T) {
+		p := NewTasmotaProvider(
+			ipPort, "", "",
+			"", "", "", "", "", // Ignore standard fields
+			"", "StatusSNS.In", "StatusSNS.Out",
+			true,
+		)
+		_, _, _, total, err := p.GetPower()
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 100.2 - 50.1 = 50.1
+		if total != 50.1 {
+			t.Errorf("expected 50.1, got %v", total)
+		}
+	})
 }
