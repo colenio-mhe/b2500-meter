@@ -83,6 +83,25 @@ func setupProviders(cfg config.Config) provider.PowerProvider {
 			case "mock":
 				p = provider.NewMockProvider(pc.Power)
 				slog.Info("Added Mock provider", "power", pc.Power)
+			case "mqtt":
+				mqttP, mqttErr := provider.NewMqttProvider(
+					pc.Broker,
+					pc.Port,
+					pc.Topic,
+					pc.User,
+					pc.Password,
+					pc.JsonPath,
+				)
+				if mqttErr != nil {
+					slog.Error("Failed to initialize MQTT provider", "error", mqttErr)
+					os.Exit(1)
+				}
+				slog.Info("Waiting for first MQTT message...", "topic", pc.Topic)
+				if err := mqttP.WaitForMessage(5 * time.Second); err != nil {
+					slog.Warn("Did not receive MQTT message within timeout", "topic", pc.Topic, "error", err)
+				}
+				p = mqttP
+				slog.Info("Added MQTT provider", "broker", pc.Broker, "topic", pc.Topic)
 			default:
 				slog.Error("Unknown provider type", "type", pc.Type)
 				os.Exit(1)

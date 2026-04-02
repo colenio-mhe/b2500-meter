@@ -5,7 +5,7 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 ## Features
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
-- **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, Mock).
+- **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Mock).
 - **Non-Blocking Throttling**: Limits data fetch frequency using efficient caching to ensure low-latency UDP responses.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
@@ -14,7 +14,7 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 
 The easiest way to run the emulator is using Docker.
 
-1.  **Create a `config.yaml`** with your Tasmota IP:
+1.  **Create a `config.yaml`** with your power sources:
 
     ```yaml
     providers:
@@ -23,7 +23,11 @@ The easiest way to run the emulator is using Docker.
         status: StatusSNS
         payload: SML
         label: Power
-        throttle: 2.0
+      - type: mqtt
+        broker: 192.168.178.10
+        port: 1883
+        topic: tele/my_sensor/SENSOR
+        json_path: ENERGY.Power
     ```
 
 2.  **Run the container**:
@@ -61,6 +65,13 @@ The `config.yaml` file supports the following options:
 
 #### Provider Options (Mock)
 - `power`: Static power value in Watts.
+
+#### Provider Options (MQTT)
+- `broker`: Hostname or IP of the MQTT broker.
+- `port`: Port of the MQTT broker (usually `1883`).
+- `topic`: MQTT topic to subscribe to.
+- `user`/`password`: (Optional) For MQTT authentication.
+- `json_path`: (Optional) [GJSON path](https://github.com/tidwall/gjson) to extract the power value from a JSON payload. If omitted, the raw payload is parsed as a float.
 
 ## Alternative Installation
 

@@ -30,6 +30,10 @@ type ProviderConfig struct {
 	Calculate bool    `yaml:"calculate"`
 	Throttle  float64 `yaml:"throttle"`
 	Power     float64 `yaml:"power"`
+	Broker    string  `yaml:"broker"`
+	Port      int     `yaml:"port"`
+	Topic     string  `yaml:"topic"`
+	JsonPath  string  `yaml:"json_path"`
 }
 
 // Load reads and parses the YAML configuration file at the given path.
