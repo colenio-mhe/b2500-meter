@@ -97,17 +97,22 @@ func (p *MqttProvider) onMessage(_ mqtt.Client, msg mqtt.Message) {
 	slog.Debug("MQTT received value", "topic", p.topic, "value", val)
 }
 
-// GetPower returns the most recently received power value.
+// GetPower returns the most recently received power value and IMMEDIATELY clears it.
+// This prevents the provider from returning stale values if the MQTT stream stops.
 // It satisfies the PowerProvider interface.
 func (p *MqttProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	if p.value == nil {
 		return 0, 0, 0, 0, fmt.Errorf("no value received from MQTT topic %s yet", p.topic)
 	}
 
-	return *p.value, 0, 0, *p.value, nil
+	val := *p.value
+	// Clear the value after reading (Read-and-Clear)
+	p.value = nil
+
+	return val, 0, 0, val, nil
 }
 
 // WaitForMessage blocks until the first message is received or the timeout is reached.
