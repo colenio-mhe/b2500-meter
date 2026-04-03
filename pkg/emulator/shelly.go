@@ -77,24 +77,30 @@ func (h *ShellyPro3EMHandler) Handle(req api.RpcRequest, p provider.PowerProvide
 // This ensures that integer values are represented as floats in the JSON response (e.g., 200.001).
 func (h *ShellyPro3EMHandler) round(power float64) float64 {
 	const decimalPointEnforcer = 0.001
+
+	// Special case for very small values around the zero line
 	if math.Abs(power) < 0.1 {
 		return decimalPointEnforcer
 	}
 
-	// Python: round(power + (0.001 if power == round(power) else 0), 1)
-	val := power
-	if power == math.Round(power) || power == 0 {
+	val := math.Round(power*10) / 10
+
+	if val == math.Round(val) {
 		val += decimalPointEnforcer
 	}
-	return math.Round(val*10) / 10
+
+	return val
 }
 
 // roundTotal applies the rounding logic to the total power value.
 func (h *ShellyPro3EMHandler) roundTotal(total float64) float64 {
 	const decimalPointEnforcer = 0.001
+
 	rounded := math.Round(total*1000) / 1000
-	if total == math.Round(total) || total == 0 {
+
+	if rounded == math.Round(rounded) || rounded == 0 {
 		return rounded + decimalPointEnforcer
 	}
+
 	return rounded
 }
