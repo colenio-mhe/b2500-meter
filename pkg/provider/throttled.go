@@ -7,90 +7,85 @@ import (
 	"time"
 )
 
-// ThrottledProvider is a caching proxy around a PowerProvider that limits the frequency of data fetches.
+// ThrottledProvider is a proxy around a PowerProvider that limits the frequency of data fetches.
 // It ensures that fresh data is fetched at most once per throttle interval.
 // If multiple requests arrive too frequently, it waits for the remaining time before fetching fresh values.
 type ThrottledProvider struct {
-	wrapped          PowerProvider
-	throttleInterval time.Duration
-	staleThreshold   time.Duration
-	lastFetchTime    time.Time
-	lastA            float64
-	lastB            float64
-	lastC            float64
-	lastTotal        float64
-	mu               sync.Mutex
+	wrapped   PowerProvider
+	interval  time.Duration
+	mu        sync.Mutex
+	pA        float64
+	pB        float64
+	pC        float64
+	pTotal    float64
+	lastError error
 }
 
-// NewThrottledProvider wraps an existing PowerProvider with the specified throttle interval and stale threshold.
-// If throttleInterval > 0, it ensures that fresh data is fetched at most once per that interval.
-// If staleThreshold > 0, GetPower will return 0 if no fresh data has been successfully fetched within that period.
-func NewThrottledProvider(_ context.Context, wrapped PowerProvider, throttleInterval time.Duration, staleThreshold time.Duration) *ThrottledProvider {
+// NewThrottledProvider wraps an existing PowerProvider with the specified throttle interval.
+// If interval > 0, it starts a background goroutine to fetch data periodically.
+func NewThrottledProvider(ctx context.Context, wrapped PowerProvider, interval time.Duration) *ThrottledProvider {
 	t := &ThrottledProvider{
-		wrapped:          wrapped,
-		throttleInterval: throttleInterval,
-		staleThreshold:   staleThreshold,
+		wrapped:  wrapped,
+		interval: interval,
 	}
 
-	// Initial fetch to populate cache
-	if throttleInterval > 0 {
-		t.mu.Lock()
-		t.fetchLocked(time.Now())
-		t.mu.Unlock()
+	if interval > 0 {
+		// Initial fetch to have data ready
+		t.fetchAndUpdate()
+		go t.run(ctx)
 	}
 
 	return t
 }
 
-// GetPower returns the power readings. If throttling is enabled, it waits if the throttle interval hasn't passed,
-// then fetches fresh data. This ensures the caller always receives data that is as fresh as possible within the throttling constraints.
+func (t *ThrottledProvider) run(ctx context.Context) {
+	ticker := time.NewTicker(t.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.fetchAndUpdate()
+		}
+	}
+}
+
+func (t *ThrottledProvider) fetchAndUpdate() {
+	a, b, c, total, err := t.wrapped.GetPower()
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if err != nil {
+		slog.Warn("Throttling: Error getting fresh values, zeroing cache", "error", err)
+		t.pA, t.pB, t.pC, t.pTotal = 0, 0, 0, 0
+		t.lastError = err
+	} else {
+		t.pA, t.pB, t.pC, t.pTotal = a, b, c, total
+		t.lastError = nil
+		slog.Debug("Throttling: Fetched fresh values", "total", total)
+	}
+}
+
+// GetPower returns the cached power readings from RAM and IMMEDIATELY clears them.
+// This prevents the integrating Marstek battery from double-counting values.
+// If multiple requests arrive before the next background fetch, they receive 0.
+// If throttling is disabled (interval <= 0), it fetches fresh data directly.
 func (t *ThrottledProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err error) {
-	if t.throttleInterval <= 0 {
+	if t.interval <= 0 {
 		return t.wrapped.GetPower()
 	}
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	now := time.Now()
-	if !t.lastFetchTime.IsZero() {
-		timeSinceLast := now.Sub(t.lastFetchTime)
-		if timeSinceLast < t.throttleInterval {
-			wait := t.throttleInterval - timeSinceLast
-			slog.Debug("Throttling: Waiting before fetching fresh values...", "wait", wait)
-			time.Sleep(wait)
-			now = time.Now()
-		}
-	}
+	a, b, c, tot := t.pA, t.pB, t.pC, t.pTotal
+	currentErr := t.lastError
 
-	return t.fetchLocked(now)
-}
+	t.pA, t.pB, t.pC, t.pTotal = 0, 0, 0, 0
+	t.lastError = nil
 
-// fetchLocked fetches fresh values from the wrapped provider and updates the cache.
-// It assumes the mutex is already held.
-func (t *ThrottledProvider) fetchLocked(startTime time.Time) (float64, float64, float64, float64, error) {
-	a, b, c, totalVal, pErr := t.wrapped.GetPower()
-	fetchDuration := time.Since(startTime)
-
-	if pErr != nil {
-		if t.lastFetchTime.IsZero() {
-			slog.Error("Throttling: Error getting initial power values", "error", pErr, "fetch_duration", fetchDuration)
-			return 0, 0, 0, 0, pErr
-		}
-
-		// Check for staleness even on error
-		if t.staleThreshold > 0 && time.Since(t.lastFetchTime) > t.staleThreshold {
-			slog.Warn("Throttling: Cache is stale, returning 0", "stale_threshold", t.staleThreshold, "last_fetch", t.lastFetchTime)
-			return 0, 0, 0, 0, nil
-		}
-
-		slog.Warn("Throttling: Error getting fresh values, using cache", "error", pErr, "last_fetch", t.lastFetchTime, "fetch_duration", fetchDuration)
-		return t.lastA, t.lastB, t.lastC, t.lastTotal, nil
-	}
-
-	t.lastA, t.lastB, t.lastC, t.lastTotal = a, b, c, totalVal
-	t.lastFetchTime = startTime // Set to the start of the fetch (after potential wait)
-
-	slog.Debug("Throttling: Fetched fresh values", "total", totalVal, "fetch_duration", fetchDuration)
-	return t.lastA, t.lastB, t.lastC, t.lastTotal, nil
+	return a, b, c, tot, currentErr
 }

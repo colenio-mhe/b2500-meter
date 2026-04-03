@@ -112,12 +112,8 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 
 			if pc.Throttle > 0 {
 				interval := time.Duration(pc.Throttle * float64(time.Second))
-				staleTimeout := time.Duration(pc.StaleTimeout * float64(time.Second))
-				if staleTimeout == 0 {
-					staleTimeout = 10 * time.Second
-				}
-				p = provider.NewThrottledProvider(ctx, p, interval, staleTimeout)
-				slog.Info("Throttling enabled", "interval", pc.Throttle, "stale_timeout", staleTimeout)
+				p = provider.NewThrottledProvider(ctx, p, interval)
+				slog.Info("Throttling enabled", "interval", pc.Throttle)
 			}
 			providers = append(providers, p)
 		}

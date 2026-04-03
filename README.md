@@ -6,8 +6,8 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
 - **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Mock).
-- **Smart Throttling**: Limits data fetch frequency by waiting for the throttle interval to pass, ensuring fresh power data is always returned to the battery.
-- **Error Resilience**: Gracefully falls back to the last cached value if a fetch fails, or returns 0W if the data becomes too stale.
+- **Smart Throttling**: Limits data fetch frequency using a background worker. It uses a **"Read-and-Clear"** (mailbox) strategy: each power reading is delivered exactly once to the battery. Subsequent requests before the next background fetch receive 0W. This prevents the battery's integrating control loop from over-adjusting.
+- **Error Resilience**: Gracefully returns 0W if a fetch fails (e.g., timeout), informing the battery to maintain its current state without over-adjusting.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
 
@@ -54,8 +54,7 @@ The `config.yaml` file supports the following options:
 - `device_id`: The source ID reported in JSON-RPC responses.
 
 #### Common Provider Options
-- `throttle`: Minimum interval (in seconds) between fetches from the device. If a request arrives before this interval has passed, the emulator will wait for the remaining time before fetching fresh data.
-- `stale_timeout`: (Optional) Maximum age (in seconds) of the cached value. If the provider fails to fetch new data for longer than this period, it will return 0W. Defaults to `10.0` if `throttle` is enabled.
+- `throttle`: Minimum interval (in seconds) between fetches from the device. A background worker periodically fetches fresh data. The system uses a **Read-and-Clear** strategy: every measurement is delivered only once to the battery. Any intermediate requests receive 0W to prevent double-counting in the battery's integrating control loop.
 
 #### Provider Options (Tasmota)
 - `ip`: IP address of the Tasmota device.

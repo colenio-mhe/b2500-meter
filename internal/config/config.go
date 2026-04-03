@@ -18,25 +18,24 @@ type Config struct {
 
 // ProviderConfig represents a single power meter source, such as Tasmota or a Mock.
 type ProviderConfig struct {
-	Type         string  `yaml:"type"`
-	IP           string  `yaml:"ip"`
-	User         string  `yaml:"user"`
-	Password     string  `yaml:"password"`
-	Status       string  `yaml:"status"`
-	Payload      string  `yaml:"payload"`
-	Label        string  `yaml:"label"`
-	LabelIn      string  `yaml:"label_in"`
-	LabelOut     string  `yaml:"label_out"`
-	Calculate    bool    `yaml:"calculate"`
-	Throttle     float64 `yaml:"throttle"`
-	StaleTimeout float64 `yaml:"stale_timeout"`
-	Power        float64 `yaml:"power"`
-	Broker       string  `yaml:"broker"`
-	Port         int     `yaml:"port"`
-	Topic        string  `yaml:"topic"`
-	JsonPath     string  `yaml:"json_path"`
-	JsonPathIn   string  `yaml:"json_path_in"`
-	JsonPathOut  string  `yaml:"json_path_out"`
+	Type        string  `yaml:"type"`
+	IP          string  `yaml:"ip"`
+	User        string  `yaml:"user"`
+	Password    string  `yaml:"password"`
+	Status      string  `yaml:"status"`
+	Payload     string  `yaml:"payload"`
+	Label       string  `yaml:"label"`
+	LabelIn     string  `yaml:"label_in"`
+	LabelOut    string  `yaml:"label_out"`
+	Calculate   bool    `yaml:"calculate"`
+	Throttle    float64 `yaml:"throttle"`
+	Power       float64 `yaml:"power"`
+	Broker      string  `yaml:"broker"`
+	Port        int     `yaml:"port"`
+	Topic       string  `yaml:"topic"`
+	JsonPath    string  `yaml:"json_path"`
+	JsonPathIn  string  `yaml:"json_path_in"`
+	JsonPathOut string  `yaml:"json_path_out"`
 }
 
 // Load reads and parses the YAML configuration file at the given path.

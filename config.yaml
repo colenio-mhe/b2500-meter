@@ -7,4 +7,3 @@ providers:
     label: Power
     calculate: false
     throttle: 2.0
-    stale_timeout: 10.0
