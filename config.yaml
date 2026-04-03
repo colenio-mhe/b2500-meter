@@ -7,3 +7,15 @@ providers:
     label: Power
     calculate: false
     throttle: 2.0
+  - type: mqtt
+    broker: 192.168.178.10
+    port: 1883
+    topic: tele/my_sensor/SENSOR
+    json_path: ENERGY.Power
+  - type: serial
+    port_name: /dev/ttyUSB0
+    baud_rate: 9600
+    payload: SML
+    label: Power
+  - type: mock
+    power: 100.0

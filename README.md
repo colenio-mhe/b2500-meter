@@ -5,8 +5,8 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 ## Features
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
-- **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Mock).
-- **Smart Throttling**: Limits data fetch frequency using a background worker. It uses a **"Read-and-Clear"** (mailbox) strategy: each power reading is delivered exactly once to the battery. Subsequent requests before the next background fetch receive 0W. This prevents the battery's integrating control loop from over-adjusting.
+- **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Serial, Mock).
+- **Throttling (Mailbox-Principle)**: The `throttle` setting (in seconds) is available for Pull-Providers (Tasmota). A background worker fetches new data at this interval. The app uses a **"Read-and-Clear"** (Mailbox) strategy: Each power measurement is delivered exactly once to the battery. Intermediate requests receive 0W. This prevents the integrating control loop of the Marstek battery from double-counting values. Without `throttle`, values are delivered continuously (not recommended for Marstek). **Note:** The `serial` and `mqtt` Providers are already mailbox providers and do not require `throttle`.
 - **Error Resilience**: Gracefully returns 0W if a fetch fails (e.g., timeout), informing the battery to maintain its current state without over-adjusting.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
@@ -28,7 +28,11 @@ The easiest way to run the emulator is using Docker.
         broker: 192.168.178.10
         port: 1883
         topic: tele/my_sensor/SENSOR
-        json_path: ENERGY.Power
+      - type: serial
+        port_name: /dev/ttyUSB0
+        baud_rate: 9600
+        payload: SML
+        label: Power
     ```
 
 2.  **Run the container**:
@@ -54,7 +58,7 @@ The `config.yaml` file supports the following options:
 - `device_id`: The source ID reported in JSON-RPC responses.
 
 #### Common Provider Options
-- `throttle`: Minimum interval (in seconds) between fetches from the device. A background worker periodically fetches fresh data. The system uses a **Read-and-Clear** strategy: every measurement is delivered only once to the battery. Any intermediate requests receive 0W to prevent double-counting in the battery's integrating control loop.
+- `throttle`: Minimal interval (in seconds) between fetches. A background worker fetches new data at this pace. The system uses a **Read-and-Clear** strategy: Each measurement is delivered only once to the battery. All intermediate requests receive 0W to avoid double-counting in the Marstek control loop. **Important for Marstek: Set `throttle` for Tasmota (e.g., `2.0`).** The `serial` and `mqtt` Providers do not require `throttle` as they implement the mailbox strategy natively.
 
 #### Provider Options (Tasmota)
 - `ip`: IP address of the Tasmota device.
@@ -78,6 +82,12 @@ The `config.yaml` file supports the following options:
 - `topic`: MQTT topic to subscribe to.
 - `user`/`password`: (Optional) For MQTT authentication.
 - `json_path`: (Optional) [GJSON path](https://github.com/tidwall/gjson) to extract the power value from a JSON payload. If omitted, the raw payload is parsed as a float.
+
+#### Provider Options (Serial)
+- `port_name`: The path to the USB/Serial port (e.g., `/dev/ttyUSB0` or `COM3`).
+- `baud_rate`: Baud rate for the serial connection (defaults to `9600`).
+- `payload`: (Optional) JSON key for the sensor payload (defaults to `SML`).
+- `label`: (Optional) JSON key for the power value (defaults to `Power`).
 
 ## Alternative Installation
 

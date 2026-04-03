@@ -104,7 +104,26 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 					slog.Warn("Did not receive MQTT message within timeout", "topic", pc.Topic, "error", err)
 				}
 				p = mqttP
-				slog.Info("Added MQTT provider", "broker", pc.Broker, "topic", pc.Topic)
+				slog.Info("Added MQTT provider (Mailbox)", "broker", pc.Broker, "topic", pc.Topic)
+				providers = append(providers, p)
+				continue
+			case "serial":
+				baud := pc.BaudRate
+				if baud == 0 {
+					baud = 9600
+				}
+				payload := pc.Payload
+				if payload == "" {
+					payload = "SML"
+				}
+				label := pc.Label
+				if label == "" {
+					label = "Power"
+				}
+				p = provider.NewSerialProvider(ctx, pc.PortName, baud, payload, label)
+				slog.Info("Added Serial provider", "port", pc.PortName, "baud", baud, "payload", payload, "label", label)
+				providers = append(providers, p)
+				continue
 			default:
 				slog.Error("Unknown provider type", "type", pc.Type)
 				os.Exit(1)
@@ -113,7 +132,9 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 			if pc.Throttle > 0 {
 				interval := time.Duration(pc.Throttle * float64(time.Second))
 				p = provider.NewThrottledProvider(ctx, p, interval)
-				slog.Info("Throttling enabled", "interval", pc.Throttle)
+				slog.Info("Throttling enabled (Mailbox)", "type", pc.Type, "interval", pc.Throttle)
+			} else {
+				slog.Warn("Throttling disabled for provider. This might cause issues with Marstek battery!", "type", pc.Type)
 			}
 			providers = append(providers, p)
 		}
