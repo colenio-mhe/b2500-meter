@@ -42,12 +42,16 @@ func NewThrottledProvider(ctx context.Context, wrapped PowerProvider, throttleIn
 }
 
 func (t *ThrottledProvider) run(ctx context.Context) {
+	timer := time.NewTimer(t.throttleInterval)
+	defer timer.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(t.throttleInterval):
+		case <-timer.C:
 			t.fetch()
+			timer.Reset(t.throttleInterval)
 		}
 	}
 }
