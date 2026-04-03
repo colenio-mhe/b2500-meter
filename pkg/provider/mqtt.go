@@ -57,14 +57,14 @@ func NewMqttProvider(broker string, port int, topic, user, password, jsonPath st
 
 // onMessage is the callback function that handles incoming MQTT messages.
 func (p *MqttProvider) onMessage(_ mqtt.Client, msg mqtt.Message) {
-	payload := string(msg.Payload())
+	payload := msg.Payload()
 	var val float64
 	var err error
 
 	if p.jsonPath != "" {
-		res := gjson.Get(payload, p.jsonPath)
+		res := gjson.GetBytes(payload, p.jsonPath)
 		if !res.Exists() {
-			slog.Error("MQTT JSON path not found", "path", p.jsonPath, "payload", payload)
+			slog.Error("MQTT JSON path not found", "path", p.jsonPath, "payload", string(payload))
 			return
 		}
 		if res.Type == gjson.JSON {
@@ -84,9 +84,9 @@ func (p *MqttProvider) onMessage(_ mqtt.Client, msg mqtt.Message) {
 			return
 		}
 	} else {
-		val, err = strconv.ParseFloat(payload, 64)
+		val, err = strconv.ParseFloat(string(payload), 64)
 		if err != nil {
-			slog.Error("MQTT payload is not a float", "payload", payload, "error", err)
+			slog.Error("MQTT payload is not a float", "payload", string(payload), "error", err)
 			return
 		}
 	}

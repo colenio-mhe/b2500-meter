@@ -81,24 +81,24 @@ func (t *TasmotaProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err
 	return power, 0, 0, power, nil
 }
 
-func (t *TasmotaProvider) getJSON(path string) (string, error) {
+func (t *TasmotaProvider) fetchBytes(path string) ([]byte, error) {
 	reqURL := fmt.Sprintf("http://%s%s", t.ip, path)
 	resp, err := t.client.Get(reqURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return string(body), nil
+	return body, nil
 }
 
 func (t *TasmotaProvider) getPowerSingle() (float64, error) {
@@ -133,7 +133,7 @@ func (t *TasmotaProvider) getPowerInOut() (in, out float64, err error) {
 	return in, out, nil
 }
 
-func (t *TasmotaProvider) fetchStatus10() (string, error) {
+func (t *TasmotaProvider) fetchStatus10() ([]byte, error) {
 	var path string
 	if t.user == "" {
 		path = "/cm?cmnd=status%2010"
@@ -144,10 +144,10 @@ func (t *TasmotaProvider) fetchStatus10() (string, error) {
 		params.Add("cmnd", "status 10")
 		path = "/cm?" + params.Encode()
 	}
-	return t.getJSON(path)
+	return t.fetchBytes(path)
 }
 
-func (t *TasmotaProvider) extractValue(resp, customPath, label string) (float64, error) {
+func (t *TasmotaProvider) extractValue(resp []byte, customPath, label string) (float64, error) {
 	var path string
 	if customPath != "" {
 		path = customPath
@@ -155,7 +155,7 @@ func (t *TasmotaProvider) extractValue(resp, customPath, label string) (float64,
 		path = fmt.Sprintf("%s.%s.%s", t.jsonStatus, t.jsonPayloadPrefix, label)
 	}
 
-	res := gjson.Get(resp, path)
+	res := gjson.GetBytes(resp, path)
 	if !res.Exists() {
 		return 0, fmt.Errorf("JSON path not found: %s", path)
 	}
