@@ -6,7 +6,8 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
 - **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Mock).
-- **Non-Blocking Throttling**: Limits data fetch frequency using efficient caching to ensure low-latency UDP responses.
+- **Smart Throttling**: Limits data fetch frequency by waiting for the throttle interval to pass, ensuring fresh power data is always returned to the battery.
+- **Error Resilience**: Gracefully falls back to the last cached value if a fetch fails, or returns 0W if the data becomes too stale.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
 
@@ -53,7 +54,7 @@ The `config.yaml` file supports the following options:
 - `device_id`: The source ID reported in JSON-RPC responses.
 
 #### Common Provider Options
-- `throttle`: Minimum interval (in seconds) between fetches from the device. Calls within this interval return the last cached value instantly.
+- `throttle`: Minimum interval (in seconds) between fetches from the device. If a request arrives before this interval has passed, the emulator will wait for the remaining time before fetching fresh data.
 - `stale_timeout`: (Optional) Maximum age (in seconds) of the cached value. If the provider fails to fetch new data for longer than this period, it will return 0W. Defaults to `10.0` if `throttle` is enabled.
 
 #### Provider Options (Tasmota)
