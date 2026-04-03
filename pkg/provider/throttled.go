@@ -42,37 +42,37 @@ func NewThrottledProvider(ctx context.Context, wrapped PowerProvider, throttleIn
 }
 
 func (t *ThrottledProvider) run(ctx context.Context) {
-	ticker := time.NewTicker(t.throttleInterval)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-time.After(t.throttleInterval):
 			t.fetch()
 		}
 	}
 }
 
 func (t *ThrottledProvider) fetch() {
+	start := time.Now()
 	a, b, c, totalVal, pErr := t.wrapped.GetPower()
+	fetchDuration := time.Since(start)
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if pErr != nil {
 		if t.lastFetchTime.IsZero() {
-			slog.Error("Throttling: Error getting initial power values", "error", pErr)
+			slog.Error("Throttling: Error getting initial power values", "error", pErr, "fetch_duration", fetchDuration)
 			return
 		}
-		slog.Warn("Throttling: Error getting fresh values, using cache", "error", pErr, "last_fetch", t.lastFetchTime)
+		slog.Warn("Throttling: Error getting fresh values, using cache", "error", pErr, "last_fetch", t.lastFetchTime, "fetch_duration", fetchDuration)
 		return
 	}
 
 	t.lastA, t.lastB, t.lastC, t.lastTotal = a, b, c, totalVal
 	t.lastFetchTime = time.Now()
 
-	slog.Debug("Throttling: Fetched fresh values", "total", totalVal)
+	slog.Debug("Throttling: Fetched fresh values", "total", totalVal, "fetch_duration", fetchDuration)
 }
 
 // GetPower returns the power readings. If throttling is enabled, it returns the cached values immediately.
