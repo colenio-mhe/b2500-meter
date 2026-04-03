@@ -81,14 +81,12 @@ func (h *ShellyPro3EMHandler) round(power float64) float64 {
 		return decimalPointEnforcer
 	}
 
-	rounded := math.Round(power*10) / 10
+	// Python: round(power + (0.001 if power == round(power) else 0), 1)
+	val := power
 	if power == math.Round(power) || power == 0 {
-		if power < 0 {
-			return rounded - decimalPointEnforcer
-		}
-		return rounded + decimalPointEnforcer
+		val += decimalPointEnforcer
 	}
-	return rounded
+	return math.Round(val*10) / 10
 }
 
 // roundTotal applies the rounding logic to the total power value.
@@ -96,9 +94,6 @@ func (h *ShellyPro3EMHandler) roundTotal(total float64) float64 {
 	const decimalPointEnforcer = 0.001
 	rounded := math.Round(total*1000) / 1000
 	if total == math.Round(total) || total == 0 {
-		if total < 0 {
-			return rounded - decimalPointEnforcer
-		}
 		return rounded + decimalPointEnforcer
 	}
 	return rounded

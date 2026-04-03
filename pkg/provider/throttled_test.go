@@ -18,67 +18,56 @@ func (c *counterProvider) GetPower() (float64, float64, float64, float64, error)
 }
 
 func TestThrottledProvider(t *testing.T) {
-	t.Run("Throttling enabled - returns cache instead of waiting", func(t *testing.T) {
+	t.Run("Throttling enabled - blocks until interval passed", func(t *testing.T) {
 		base := &counterProvider{}
 		interval := 100 * time.Millisecond
 		tp := NewThrottledProvider(t.Context(), base, interval, 0)
 
-		// Wait for initial background fetch
-		time.Sleep(20 * time.Millisecond)
+		// Initial fetch happened in NewThrottledProvider
+		if atomic.LoadInt32(&base.calls) != 1 {
+			t.Errorf("expected 1 call (initial), got %d", atomic.LoadInt32(&base.calls))
+		}
 
 		start := time.Now()
-		// First call should return cached value from initial fetch
-		p1, _, _, _, err := tp.GetPower()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if atomic.LoadInt32(&base.calls) != 1 {
-			t.Errorf("expected 1 call, got %d", atomic.LoadInt32(&base.calls))
-		}
-		if p1 != 1 {
-			t.Errorf("expected power 1, got %f", p1)
-		}
-
-		// Second call should NOT wait and return cached value (1)
+		// This call should block to satisfy the throttle interval
 		p2, _, _, _, err := tp.GetPower()
-		if err != nil {
-			t.Fatal(err)
-		}
 		elapsed := time.Since(start)
 
-		if atomic.LoadInt32(&base.calls) != 1 {
-			t.Errorf("expected still 1 call (cached), got %d", atomic.LoadInt32(&base.calls))
+		if err != nil {
+			t.Fatal(err)
 		}
-		if p2 != 1 {
-			t.Errorf("expected power 1 (cached), got %f", p2)
+		if atomic.LoadInt32(&base.calls) != 2 {
+			t.Errorf("expected 2 calls, got %d", atomic.LoadInt32(&base.calls))
 		}
-		if elapsed > 10*time.Millisecond {
-			t.Errorf("expected call to be fast (cached), but took %v", elapsed)
+		if p2 != 2 {
+			t.Errorf("expected power 2, got %f", p2)
+		}
+		// It should have blocked for approximately 'interval'
+		if elapsed < 80*time.Millisecond {
+			t.Errorf("expected call to block, but took only %v", elapsed)
 		}
 	})
 
-	t.Run("Throttling enabled - fetch fresh after interval", func(t *testing.T) {
+	t.Run("Throttling enabled - no wait if enough time passed", func(t *testing.T) {
 		base := &counterProvider{}
 		interval := 50 * time.Millisecond
 		tp := NewThrottledProvider(t.Context(), base, interval, 0)
 
-		// Wait for initial fetch
-		time.Sleep(10 * time.Millisecond)
-		tp.GetPower() // should return 1
+		// Wait for interval to pass since initial fetch
+		time.Sleep(interval + 10*time.Millisecond)
 
-		// Wait for next background fetch
-		time.Sleep(interval + 20*time.Millisecond)
+		start := time.Now()
+		p, _, _, _, err := tp.GetPower()
+		elapsed := time.Since(start)
 
-		if atomic.LoadInt32(&base.calls) != 2 {
-			t.Errorf("expected 2 calls after interval, got %d", atomic.LoadInt32(&base.calls))
-		}
-
-		p2, _, _, _, err := tp.GetPower() // should return cached 2
 		if err != nil {
 			t.Fatal(err)
 		}
-		if p2 != 2 {
-			t.Errorf("expected power 2, got %f", p2)
+		if p != 2 {
+			t.Errorf("expected power 2, got %f", p)
+		}
+		if elapsed > 20*time.Millisecond {
+			t.Errorf("expected call to be fast, but took %v", elapsed)
 		}
 	})
 
@@ -97,43 +86,32 @@ func TestThrottledProvider(t *testing.T) {
 		}
 	})
 
-	t.Run("Stale threshold - returns 0 if cache is too old", func(t *testing.T) {
+	t.Run("Stale threshold - returns 0 if cache is too old and fetch fails", func(t *testing.T) {
 		type failingProvider struct {
 			calls int32
 		}
 		base := &failingProvider{}
-		// First call succeeds, subsequent calls fail
-		interval := 50 * time.Millisecond
-		staleThreshold := 100 * time.Millisecond
+		interval := 10 * time.Millisecond
+		staleThreshold := 50 * time.Millisecond
 
 		mock := func() (float64, float64, float64, float64, error) {
 			c := atomic.AddInt32(&base.calls, 1)
 			if c == 1 {
+				// Initial fetch in NewThrottledProvider succeeds
 				return 100, 0, 0, 100, nil
 			}
+			// Subsequent fetches fail
 			return 0, 0, 0, 0, fmt.Errorf("provider error")
 		}
 
-		// Use a custom provider that uses the mock function
 		wrapped := &customProvider{getPower: mock}
 		tp := NewThrottledProvider(t.Context(), wrapped, interval, staleThreshold)
 
-		// Wait for initial fetch
-		time.Sleep(20 * time.Millisecond)
+		// Wait for stale threshold to pass
+		time.Sleep(staleThreshold + 20*time.Millisecond)
+
+		// This call will attempt to fetch, fail, and then see that the cache is stale
 		p, _, _, _, err := tp.GetPower()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if p != 100 {
-			t.Errorf("expected 100, got %f", p)
-		}
-
-		// Wait for stale threshold to pass.
-		// After initial fetch, background loop will try again after 50ms and fail.
-		// lastFetchTime will stay at the time of the first fetch.
-		time.Sleep(staleThreshold + 10*time.Millisecond)
-
-		p, _, _, _, err = tp.GetPower()
 		if err != nil {
 			t.Fatal(err)
 		}

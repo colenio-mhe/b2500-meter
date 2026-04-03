@@ -19,8 +19,8 @@ func TestShellyPro3EMHandler_Rounding(t *testing.T) {
 		{"Zero", 0, 0.001},
 		{"Small Positive", 0.05, 0.001},
 		{"Small Negative", -0.05, 0.001},
-		{"Integer", 200, 200.001},
-		{"Integer Negative", -100, -100.001},
+		{"Integer", 200, 200.0},
+		{"Integer Negative", -100, -100.0},
 		{"Decimal", 123.4, 123.4},
 		{"Decimal Many", 123.456, 123.5},
 	}
@@ -53,7 +53,7 @@ func TestShellyPro3EMHandler_Handle(t *testing.T) {
 			t.Errorf("Src mismatch: %v", resp.Src)
 		}
 		res := resp.Result.(api.EmStatusResponse)
-		if res.AActPower != 200.001 {
+		if res.AActPower != 200.0 {
 			t.Errorf("AActPower mismatch: %v", res.AActPower)
 		}
 	})
