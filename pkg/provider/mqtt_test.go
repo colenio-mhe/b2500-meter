@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -61,9 +62,9 @@ func TestMqttProvider_onMessage(t *testing.T) {
 		p.onMessage(nil, msg)
 
 		// It should not update the value if it's invalid
-		_, _, _, _, err := p.GetPower()
-		if err == nil {
-			t.Fatal("expected error because no valid value should have been received")
+		pA, _, _, _, _ := p.GetPower()
+		if pA != 0 {
+			t.Errorf("expected 0 because no valid value should have been received, got %f", pA)
 		}
 	})
 
@@ -82,10 +83,39 @@ func TestMqttProvider_onMessage(t *testing.T) {
 			t.Errorf("first call: expected 100.0, got %v", val)
 		}
 
-		// Second call should return an error (or 0) because it's cleared
-		_, _, _, _, err = p.GetPower()
+		// Second call should return 0 (Read-and-Clear)
+		val2, _, _, _, err := p.GetPower()
+		if err != nil {
+			t.Fatalf("second call: expected no error, got %v", err)
+		}
+		if val2 != 0 {
+			t.Errorf("second call: expected 0.0, got %v", val2)
+		}
+	})
+
+	t.Run("error clears value", func(t *testing.T) {
+		p := &MqttProvider{}
+		payload := `100.0`
+		msg := &mockMessage{payload: []byte(payload)}
+		p.onMessage(nil, msg)
+
+		p.setError(fmt.Errorf("mqtt error"))
+
+		_, _, _, total, err := p.GetPower()
 		if err == nil {
-			t.Fatal("second call: expected error after value was cleared, but got nil")
+			t.Error("expected error, got nil")
+		}
+		if total != 0 {
+			t.Errorf("expected 0 on error, got %f", total)
+		}
+
+		// Second call should have no error and 0
+		_, _, _, total, err = p.GetPower()
+		if err != nil {
+			t.Errorf("second call: expected no error, got %v", err)
+		}
+		if total != 0 {
+			t.Errorf("second call: expected 0, got %f", total)
 		}
 	})
 }
