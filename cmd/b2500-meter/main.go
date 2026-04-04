@@ -148,6 +148,12 @@ func setupHandler(cfg config.Config) emulator.DeviceHandler {
 		deviceID = "shellypro3em-1234567890ab"
 	}
 
+	if cfg.ZeroFallback {
+		slog.Info("Global Error Policy: ZERO FALLBACK (Sending 0W to battery on sensor errors to maintain Hold-State)")
+	} else {
+		slog.Info("Global Error Policy: PACKET DROP (Omiting response on sensor errors - battery may safety-stop)")
+	}
+
 	switch cfg.Device {
 	case "shellypro3em", "":
 		handler = &emulator.ShellyPro3EMHandler{
