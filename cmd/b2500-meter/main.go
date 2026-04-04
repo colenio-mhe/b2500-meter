@@ -128,7 +128,7 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 				p = provider.NewThrottledProvider(ctx, p, interval)
 				slog.Info("Throttling enabled (Mailbox)", "type", pc.Type, "interval", pc.Throttle)
 			} else {
-				slog.Warn("Throttling disabled for provider. This might cause issues with Marstek battery!", "type", pc.Type)
+				slog.Info("Throttling disabled for provider.", "type", pc.Type)
 			}
 			providers = append(providers, p)
 		}
