@@ -39,7 +39,7 @@ func NewTasmotaProvider(
 ) *TasmotaProvider {
 	return &TasmotaProvider{
 		client: &http.Client{
-			Timeout: 3 * time.Second,
+			Timeout: 5 * time.Second,
 		},
 		ip:                   ip,
 		user:                 user,
