@@ -99,14 +99,9 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 					slog.Error("Failed to initialize MQTT provider", "error", mqttErr)
 					os.Exit(1)
 				}
-				slog.Info("Waiting for first MQTT message...", "topic", pc.Topic)
-				if err := mqttP.WaitForMessage(5 * time.Second); err != nil {
-					slog.Warn("Did not receive MQTT message within timeout", "topic", pc.Topic, "error", err)
-				}
+
 				p = mqttP
 				slog.Info("Added MQTT provider (Mailbox)", "broker", pc.Broker, "topic", pc.Topic)
-				providers = append(providers, p)
-				continue
 			case "serial":
 				baud := pc.BaudRate
 				if baud == 0 {
@@ -122,13 +117,12 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 				}
 				p = provider.NewSerialProvider(ctx, pc.PortName, baud, payload, label)
 				slog.Info("Added Serial provider", "port", pc.PortName, "baud", baud, "payload", payload, "label", label)
-				providers = append(providers, p)
-				continue
 			default:
 				slog.Error("Unknown provider type", "type", pc.Type)
 				os.Exit(1)
 			}
 
+			// Apply throttling logic for all provider types
 			if pc.Throttle > 0 {
 				interval := time.Duration(pc.Throttle * float64(time.Second))
 				p = provider.NewThrottledProvider(ctx, p, interval)
