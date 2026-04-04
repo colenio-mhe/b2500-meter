@@ -11,7 +11,8 @@ import (
 
 // ShellyPro3EMHandler implements the logic for a Shelly Pro 3EM device.
 type ShellyPro3EMHandler struct {
-	DeviceID string
+	DeviceID     string
+	ZeroFallback bool
 }
 
 // Handle processes incoming RPC requests for the Shelly Pro 3EM device.
@@ -45,7 +46,13 @@ func (h *ShellyPro3EMHandler) Handle(req api.RpcRequest, p provider.PowerProvide
 	pA, pB, pC, total, err := p.GetPower()
 	if err != nil {
 		slog.Error("Failed to get power from provider", "error", err)
-		return nil, false
+
+		if h.ZeroFallback {
+			slog.Debug("Zero fallback active: sending 0W response")
+			pA, pB, pC, total = 0, 0, 0, 0
+		} else {
+			return nil, false
+		}
 	}
 
 	var result any

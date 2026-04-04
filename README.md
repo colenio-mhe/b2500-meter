@@ -6,8 +6,10 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
 - **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Serial, Mock).
-- **Throttling (Synchronous)**: The `throttle` setting (in seconds) is available for Pull-Providers (Tasmota). A call to `GetPower` will block until the specified interval has passed since the last fetch. This ensures the underlying source is not overwhelmed and the battery receives consistent updates. If a fetch fails, the provider returns 0W to inform the battery to maintain its current state without over-adjusting. **Note:** The `serial` and `mqtt` Providers are push-based and block until new data is received, ensuring every value is delivered exactly as it arrives.
-- **Error Resilience**: Gracefully returns 0W if a fetch fails or no data is available.
+- **Synchronous Blocking (No-Cache Policy)**: To prevent control loop oscillations, this emulator **never** sends old or cached data.
+    - **Pull-Providers (Tasmota)**: Blocks requests until the `throttle` interval has passed.
+    - **Push-Providers (MQTT/Serial)**: Blocks until a brand-new value arrives from the source ("Long Polling").
+- **Error Resilience (Configurable)**: Can optionally return 0W if a fetch fails using the `zero_fallback` option to stabilize the battery's control loop.
 - **High Performance**: Optimized JSON parsing using `gjson` and zero-allocation byte-level processing for Serial data.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
@@ -19,6 +21,8 @@ The easiest way to run the emulator is using Docker.
 1.  **Create a `config.yaml`** with your power sources:
 
     ```yaml
+    log_level: info
+    zero_fallback: true  # Recommended for stable regulation during sensor glitches
     providers:
       - type: tasmota
         ip: 192.168.178.6
@@ -54,12 +58,15 @@ The Marstek battery will now find the emulated Shelly on your network. Make sure
 The `config.yaml` file supports the following options:
 
 #### Global Options
-- `log_level`: Verbosity of the logs. Set to `debug` to see raw power fetches and connection details.
-- `device`: The type of device to emulate (currently only `shellypro3em` is supported).
+- `log_level`: Verbosity of the logs. Set to `debug` to see raw power fetches.
+- `device`: The type of device to emulate (currently only `shellypro3em` supported).
 - `device_id`: The source ID reported in JSON-RPC responses.
+- `zero_fallback`: (Default: `false`)
+    - If `true`: Returns 0W to the battery if a fetch fails. This signals "zero deviation," causing the battery to **hold its current output** stable.
+    - If `false`: The emulator remains silent (UDP timeout) on errors. This may cause the battery to stop regulation or go to a safety state after a few seconds.
 
 #### Common Provider Options
-- `throttle`: (Optional) Minimal interval (in seconds) between fetches for pull-based providers (Tasmota). `GetPower` will block until this interval has passed since the previous fetch to ensure consistent data delivery and avoid overwhelming the source. **Important for Marstek: Set `throttle` for Tasmota (e.g., `2.0`).** Serial and MQTT providers are push-based and do not use this setting as they naturally wait for incoming data.
+- `throttle`: (Optional) Minimal interval (in seconds) between fetches for pull-based providers (Tasmota). `GetPower` will block until this interval has passed to ensure fresh data and avoid overwhelming the source. **Set to `2.0` for Tasmota.** MQTT and Serial providers are push-based and do not use this setting as they naturally wait for incoming data.
 
 #### Provider Options (Tasmota)
 - `ip`: IP address of the Tasmota device.
@@ -85,7 +92,7 @@ The `config.yaml` file supports the following options:
 - `json_path`: (Optional) [GJSON path](https://github.com/tidwall/gjson) to extract the power value from a JSON payload. If omitted, the raw payload is parsed as a float.
 
 #### Provider Options (Serial)
-- `port_name`: The path to the USB/Serial port (e.g., `/dev/ttyUSB0` or `COM3`).
+- `port_name`: The path to the USB/Serial port (e.g., `/dev/ttyUSB0`).
 - `baud_rate`: (Default: `9600`) Baud rate for the serial connection.
 - `payload`: (Default: `SML`) JSON key for the sensor payload.
 - `label`: (Default: `Power`) JSON key for the power value.
@@ -114,12 +121,10 @@ docker run -d \
 
 ## Credits
 
-This project was inspired by [tomquist/b2500-meter](https://github.com/tomquist/b2500-meter), which provides a similar emulator written in Python.
+This project was inspired by [tomquist/b2500-meter](https://github.com/tomquist/b2500-meter). This Go implementation focuses on lower latency, native concurrency, and a strict "No-Cache" policy for improved regulation stability.
 
 ## How it works
 
-The Marstek B2500 battery expects a Shelly Pro 3EM on the local network to provide real-time power consumption data. This emulator listens for the battery's UDP broadcast requests on the standard Shelly ports and responds with formatted JSON-RPC messages.
+The Marstek B2500 battery expects a Shelly Pro 3EM on the local network. This emulator listens for the battery's UDP broadcast requests and responds with formatted JSON-RPC messages.
 
-The emulator handles the specific rounding and "decimal point enforcement" (e.g., adding 0.001 to integers) required for the battery to correctly parse the power values. It uses a synchronous blocking strategy for throttling to ensure each request gets fresh data within reasonable timing limits.
-
-When you configure multiple providers, the emulator sums the power values from all of them before reporting the total to the battery.
+The emulator handles the specific rounding and "decimal point enforcement" (e.g., adding 0.001 to integers) required for the battery firmware. It uses a **Synchronous Blocking Strategy**: by waiting for a fresh measurement before responding to the battery's request, it synchronizes the battery's internal PI-regulator with the actual update rate of your power meter. This eliminates "sawtooth" patterns and minimizes grid leakage.

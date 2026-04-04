@@ -10,10 +10,11 @@ import (
 
 // Config is the root configuration object.
 type Config struct {
-	LogLevel  string           `yaml:"log_level"`
-	Device    string           `yaml:"device"`
-	DeviceID  string           `yaml:"device_id"`
-	Providers []ProviderConfig `yaml:"providers"`
+	LogLevel     string           `yaml:"log_level"`
+	Device       string           `yaml:"device"`
+	DeviceID     string           `yaml:"device_id"`
+	ZeroFallback bool             `yaml:"zero_fallback"`
+	Providers    []ProviderConfig `yaml:"providers"`
 }
 
 // ProviderConfig represents a single power meter source, such as Tasmota or a Mock.

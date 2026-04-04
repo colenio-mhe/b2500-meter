@@ -151,7 +151,8 @@ func setupHandler(cfg config.Config) emulator.DeviceHandler {
 	switch cfg.Device {
 	case "shellypro3em", "":
 		handler = &emulator.ShellyPro3EMHandler{
-			DeviceID: deviceID,
+			DeviceID:     deviceID,
+			ZeroFallback: cfg.ZeroFallback,
 		}
 		if cfg.Device == "" {
 			slog.Info("No device type configured, defaulting to shellypro3em")
