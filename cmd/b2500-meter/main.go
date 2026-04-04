@@ -101,7 +101,7 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 				}
 
 				p = mqttP
-				slog.Info("Added MQTT provider (Mailbox)", "broker", pc.Broker, "topic", pc.Topic)
+				slog.Info("Added MQTT provider", "broker", pc.Broker, "topic", pc.Topic)
 			case "serial":
 				baud := pc.BaudRate
 				if baud == 0 {
@@ -126,7 +126,7 @@ func setupProviders(ctx context.Context, cfg config.Config) provider.PowerProvid
 			if pc.Throttle > 0 {
 				interval := time.Duration(pc.Throttle * float64(time.Second))
 				p = provider.NewThrottledProvider(ctx, p, interval)
-				slog.Info("Throttling enabled (Mailbox)", "type", pc.Type, "interval", pc.Throttle)
+				slog.Info("Throttling enabled", "type", pc.Type, "interval", pc.Throttle)
 			} else {
 				slog.Info("Throttling disabled for provider.", "type", pc.Type)
 			}
