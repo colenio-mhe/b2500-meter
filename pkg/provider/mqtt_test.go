@@ -1,8 +1,8 @@
 package provider
 
 import (
-	"fmt"
 	"testing"
+	"time"
 )
 
 type mockMessage struct {
@@ -17,105 +17,105 @@ func (m *mockMessage) MessageID() uint16 { return 0 }
 func (m *mockMessage) Payload() []byte   { return m.payload }
 func (m *mockMessage) Ack()              {}
 
-func TestMqttProvider_onMessage(t *testing.T) {
-	t.Run("with json path", func(t *testing.T) {
+func TestMqttProvider_Flow(t *testing.T) {
+	t.Run("successful data parsing and blocking", func(t *testing.T) {
 		p := &MqttProvider{
 			jsonPath: "ENERGY.Power",
+			dataCh:   make(chan mqttResult),
 		}
 
 		payload := `{"ENERGY": {"Power": 123.45}}`
 		msg := &mockMessage{payload: []byte(payload)}
+
+		// Start GetPower in a goroutine because it blocks
+		resultChan := make(chan float64)
+		go func() {
+			val, _, _, _, _ := p.GetPower()
+			resultChan <- val
+		}()
+
+		// Small sleep to ensure GetPower is waiting on the channel
+		time.Sleep(10 * time.Millisecond)
 		p.onMessage(nil, msg)
 
-		a, _, _, total, err := p.GetPower()
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		if a != 123.45 || total != 123.45 {
-			t.Errorf("expected 123.45, got %v", a)
+		select {
+		case val := <-resultChan:
+			if val != 123.45 {
+				t.Errorf("expected 123.45, got %v", val)
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Error("timeout: GetPower did not receive the message")
 		}
 	})
 
-	t.Run("without json path", func(t *testing.T) {
-		p := &MqttProvider{}
-
-		payload := `456.78`
-		msg := &mockMessage{payload: []byte(payload)}
-		p.onMessage(nil, msg)
-
-		a, _, _, total, err := p.GetPower()
-		if err != nil {
-			t.Fatalf("expected no error, got %v", err)
-		}
-		if a != 456.78 || total != 456.78 {
-			t.Errorf("expected 456.78, got %v", a)
-		}
-	})
-
-	t.Run("invalid payload with json path", func(t *testing.T) {
+	t.Run("drop message when no listener is active", func(t *testing.T) {
 		p := &MqttProvider{
-			jsonPath: "ENERGY.Power",
+			dataCh: make(chan mqttResult),
 		}
 
-		payload := `{"ENERGY": {"Power": "invalid"}}`
-		msg := &mockMessage{payload: []byte(payload)}
+		// Send message while NO GetPower is waiting
+		msg := &mockMessage{payload: []byte(`100.0`)}
 		p.onMessage(nil, msg)
 
-		// It should not update the value if it's invalid
-		pA, _, _, _, _ := p.GetPower()
-		if pA != 0 {
-			t.Errorf("expected 0 because no valid value should have been received, got %f", pA)
+		// Now start a listener
+		resultChan := make(chan float64)
+		go func() {
+			val, _, _, _, _ := p.GetPower()
+			resultChan <- val
+		}()
+
+		// This should block because the 100.0 was dropped
+		select {
+		case <-resultChan:
+			t.Error("expected to block, but received a dropped value")
+		case <-time.After(50 * time.Millisecond):
+			// Success: No data received yet
+		}
+
+		// Send a new fresh value
+		p.onMessage(nil, &mockMessage{payload: []byte(`200.0`)})
+		val := <-resultChan
+		if val != 200.0 {
+			t.Errorf("expected 200.0, got %v", val)
 		}
 	})
 
-	t.Run("read and clear behavior", func(t *testing.T) {
-		p := &MqttProvider{}
-		payload := `100.0`
-		msg := &mockMessage{payload: []byte(payload)}
-		p.onMessage(nil, msg)
-
-		// First call should return the value
-		val, _, _, _, err := p.GetPower()
-		if err != nil {
-			t.Fatalf("first call: expected no error, got %v", err)
-		}
-		if val != 100.0 {
-			t.Errorf("first call: expected 100.0, got %v", val)
+	t.Run("raw payload without json path", func(t *testing.T) {
+		p := &MqttProvider{
+			dataCh: make(chan mqttResult),
 		}
 
-		// Second call should return 0 (Read-and-Clear)
-		val2, _, _, _, err := p.GetPower()
-		if err != nil {
-			t.Fatalf("second call: expected no error, got %v", err)
-		}
-		if val2 != 0 {
-			t.Errorf("second call: expected 0.0, got %v", val2)
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			p.onMessage(nil, &mockMessage{payload: []byte(`456.78`)})
+		}()
+
+		val, _, _, _, _ := p.GetPower()
+		if val != 456.78 {
+			t.Errorf("expected 456.78, got %v", val)
 		}
 	})
 
-	t.Run("error clears value", func(t *testing.T) {
-		p := &MqttProvider{}
-		payload := `100.0`
-		msg := &mockMessage{payload: []byte(payload)}
-		p.onMessage(nil, msg)
-
-		p.setError(fmt.Errorf("mqtt error"))
-
-		_, _, _, total, err := p.GetPower()
-		if err == nil {
-			t.Error("expected error, got nil")
-		}
-		if total != 0 {
-			t.Errorf("expected 0 on error, got %f", total)
+	t.Run("invalid payload is ignored", func(t *testing.T) {
+		p := &MqttProvider{
+			dataCh: make(chan mqttResult),
 		}
 
-		// Second call should have no error and 0
-		_, _, _, total, err = p.GetPower()
-		if err != nil {
-			t.Errorf("second call: expected no error, got %v", err)
-		}
-		if total != 0 {
-			t.Errorf("second call: expected 0, got %f", total)
+		// Start listener
+		resultChan := make(chan bool)
+		go func() {
+			p.GetPower()
+			resultChan <- true
+		}()
+
+		// Send invalid data - onMessage should log error and NOT send to channel
+		p.onMessage(nil, &mockMessage{payload: []byte(`invalid`)})
+
+		select {
+		case <-resultChan:
+			t.Error("GetPower should have remained blocked after invalid payload")
+		case <-time.After(50 * time.Millisecond):
+			// Success
 		}
 	})
 }

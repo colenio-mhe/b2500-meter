@@ -6,8 +6,9 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 
 - **Shelly Pro 3EM Emulation**: Responds to UDP status requests on ports 1010 and 2220.
 - **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Serial, Mock).
-- **Throttling (Mailbox-Principle)**: The `throttle` setting (in seconds) is available for Pull-Providers (Tasmota). A background worker fetches new data at this interval. The app uses a **"Read-and-Clear"** (Mailbox) strategy: Each power measurement is delivered exactly once to the battery. Intermediate requests receive 0W. This prevents the integrating control loop of the Marstek battery from double-counting values. Without `throttle`, values are delivered continuously (not recommended for Marstek). **Note:** The `serial` and `mqtt` Providers are already mailbox providers and do not require `throttle`.
-- **Error Resilience**: Gracefully returns 0W if a fetch fails (e.g., timeout), informing the battery to maintain its current state without over-adjusting.
+- **Throttling (Synchronous)**: The `throttle` setting (in seconds) is available for Pull-Providers (Tasmota). A call to `GetPower` will block until the specified interval has passed since the last fetch. This ensures the underlying source is not overwhelmed and the battery receives consistent updates. If a fetch fails, the provider returns 0W to inform the battery to maintain its current state without over-adjusting. **Note:** The `serial` and `mqtt` Providers are push-based and block until new data is received, ensuring every value is delivered exactly as it arrives.
+- **Error Resilience**: Gracefully returns 0W if a fetch fails or no data is available.
+- **High Performance**: Optimized JSON parsing using `gjson` and zero-allocation byte-level processing for Serial data.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.
 - **Dockerized**: Ready to run in a lightweight container.
 
@@ -58,14 +59,14 @@ The `config.yaml` file supports the following options:
 - `device_id`: The source ID reported in JSON-RPC responses.
 
 #### Common Provider Options
-- `throttle`: Minimal interval (in seconds) between fetches. A background worker fetches new data at this pace. The system uses a **Read-and-Clear** strategy: Each measurement is delivered only once to the battery. All intermediate requests receive 0W to avoid double-counting in the Marstek control loop. **Important for Marstek: Set `throttle` for Tasmota (e.g., `2.0`).** The `serial` and `mqtt` Providers do not require `throttle` as they implement the mailbox strategy natively.
+- `throttle`: (Optional) Minimal interval (in seconds) between fetches for pull-based providers (Tasmota). `GetPower` will block until this interval has passed since the previous fetch to ensure consistent data delivery and avoid overwhelming the source. **Important for Marstek: Set `throttle` for Tasmota (e.g., `2.0`).** Serial and MQTT providers are push-based and do not use this setting as they naturally wait for incoming data.
 
 #### Provider Options (Tasmota)
 - `ip`: IP address of the Tasmota device.
 - `user`/`password`: (Optional) For HTTP authentication.
-- `status`: JSON key for status (usually `StatusSNS`).
-- `payload`: JSON key for the sensor payload (e.g., `SML`, `ENERGY`).
-- `label`: JSON key for the power value (when `calculate` is `false`).
+- `status`: (Default: `StatusSNS`) JSON key for status.
+- `payload`: (Default: `SML`) JSON key for the sensor payload.
+- `label`: (Default: `Power`) JSON key for the power value (when `calculate` is `false`).
 - `calculate`: If `true`, calculates net power using `label_in` and `label_out`.
 - `label_in`: JSON key for imported power (required if `calculate: true`).
 - `label_out`: JSON key for exported power (required if `calculate: true`).
@@ -85,9 +86,9 @@ The `config.yaml` file supports the following options:
 
 #### Provider Options (Serial)
 - `port_name`: The path to the USB/Serial port (e.g., `/dev/ttyUSB0` or `COM3`).
-- `baud_rate`: Baud rate for the serial connection (defaults to `9600`).
-- `payload`: (Optional) JSON key for the sensor payload (defaults to `SML`).
-- `label`: (Optional) JSON key for the power value (defaults to `Power`).
+- `baud_rate`: (Default: `9600`) Baud rate for the serial connection.
+- `payload`: (Default: `SML`) JSON key for the sensor payload.
+- `label`: (Default: `Power`) JSON key for the power value.
 
 ## Alternative Installation
 
@@ -119,6 +120,6 @@ This project was inspired by [tomquist/b2500-meter](https://github.com/tomquist/
 
 The Marstek B2500 battery expects a Shelly Pro 3EM on the local network to provide real-time power consumption data. This emulator listens for the battery's UDP broadcast requests on the standard Shelly ports and responds with formatted JSON-RPC messages.
 
-The emulator handles the specific rounding and "decimal point enforcement" (e.g., adding 0.001 to integers) required for the battery to correctly parse the power values.
+The emulator handles the specific rounding and "decimal point enforcement" (e.g., adding 0.001 to integers) required for the battery to correctly parse the power values. It uses a synchronous blocking strategy for throttling to ensure each request gets fresh data within reasonable timing limits.
 
 When you configure multiple providers, the emulator sums the power values from all of them before reporting the total to the battery.
