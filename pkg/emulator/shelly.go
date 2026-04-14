@@ -45,7 +45,7 @@ func (h *ShellyPro3EMHandler) Handle(req api.RpcRequest, p provider.PowerProvide
 
 	pA, pB, pC, total, err := p.GetPower()
 	if err != nil {
-		slog.Error("Failed to get power from provider", "error", err)
+		slog.Debug("Failed to get power from provider", "error", err)
 
 		if h.ZeroFallback {
 			slog.Debug("Zero fallback active: sending 0W response")

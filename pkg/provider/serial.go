@@ -4,38 +4,39 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/tidwall/gjson"
 	"go.bug.st/serial"
 )
 
-type powerResult struct {
-	a, b, c, tot float64
-	err          error
-}
-
-// SerialProvider blocks GetPower calls until a new telegram is received via USB.
+// SerialProvider reads telemetry from a USB serial port and caches the latest value.
 type SerialProvider struct {
 	portName string
 	baudRate int
 	jsonPath string
-	dataCh   chan powerResult
+
+	mu      sync.Mutex
+	lastVal float64
+	isFresh bool
+	lastErr error // Stores connection errors so the UDP server can fail fast
 }
 
-// NewSerialProvider initializes the provider and the internal signaling channel.
+// NewSerialProvider initializes the provider and starts the background reader.
 func NewSerialProvider(ctx context.Context, portName string, baudRate int, payload, label string) *SerialProvider {
 	path := fmt.Sprintf("%s.%s", payload, label)
 	s := &SerialProvider{
 		portName: portName,
 		baudRate: baudRate,
 		jsonPath: path,
-		dataCh:   make(chan powerResult),
 	}
 
+	// Start the non-blocking reader loop
 	go s.run(ctx)
 
 	return s
@@ -54,7 +55,8 @@ func (s *SerialProvider) run(ctx context.Context) {
 			port, err := serial.Open(s.portName, mode)
 			if err != nil {
 				slog.Error("Serial: Could not open port", "port", s.portName, "error", err)
-				s.broadcastError(ctx, err)
+				s.setError(err)
+
 				select {
 				case <-ctx.Done():
 					return
@@ -64,6 +66,7 @@ func (s *SerialProvider) run(ctx context.Context) {
 			}
 
 			slog.Info("Serial: Listening on USB port", "port", s.portName, "baud", s.baudRate)
+			s.setError(nil) // Clear any previous connection errors
 
 			scanner := bufio.NewScanner(port)
 			for scanner.Scan() {
@@ -86,19 +89,18 @@ func (s *SerialProvider) run(ctx context.Context) {
 						}
 					}
 
-					// Block until a consumer is ready or context is canceled
-					select {
-					case <-ctx.Done():
-						port.Close()
-						return
-					case s.dataCh <- powerResult{a: 0, b: 0, c: 0, tot: val, err: nil}:
-					}
+					// Safely update the cache and flag the value as fresh
+					s.mu.Lock()
+					s.lastVal = val
+					s.isFresh = true
+					s.lastErr = nil
+					s.mu.Unlock()
 				}
 			}
 
 			if err := scanner.Err(); err != nil {
 				slog.Error("Serial: Error reading", "error", err)
-				s.broadcastError(ctx, err)
+				s.setError(err)
 			}
 			port.Close()
 
@@ -112,17 +114,26 @@ func (s *SerialProvider) run(ctx context.Context) {
 	}
 }
 
-func (s *SerialProvider) broadcastError(ctx context.Context, err error) {
-	select {
-	case <-ctx.Done():
-	case s.dataCh <- powerResult{err: err}:
-	default:
-		// Do not block if no one is listening to an error
-	}
+// setError safely updates the connection error state.
+func (s *SerialProvider) setError(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastErr = err
 }
 
-// GetPower blocks until a new JSON object is parsed from the serial stream.
-func (s *SerialProvider) GetPower() (float64, float64, float64, float64, error) {
-	res := <-s.dataCh
-	return res.a, res.b, res.c, res.tot, res.err
+// GetPower sends the fresh value or returns an error if data is stale/port is down.
+func (s *SerialProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.lastErr != nil {
+		return 0, 0, 0, 0, s.lastErr
+	}
+
+	if !s.isFresh {
+		return 0, 0, 0, 0, errors.New("stale data: wait for new serial update")
+	}
+
+	s.isFresh = false
+	return 0, 0, 0, s.lastVal, nil
 }

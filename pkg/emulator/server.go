@@ -66,7 +66,9 @@ func (s *Server) Run(ctx context.Context) error {
 			data := make([]byte, n)
 			copy(data, buffer[:n])
 
-			go s.handleRequest(ctx, conn, data, clientAddr)
+			//go s.handleRequest(ctx, conn, data, clientAddr)
+			// We try synchron handling for now
+			s.handleRequest(ctx, conn, data, clientAddr)
 		}
 	}()
 

@@ -8,7 +8,7 @@ An emulator for the Shelly Pro 3EM power meter, designed to work with the Marste
 - **Multiple Providers**: Aggregate readings from multiple power meters (Tasmota, MQTT, Serial, Mock).
 - **Synchronous Blocking (No-Cache Policy)**: To prevent control loop oscillations, this emulator **never** sends old or cached data.
     - **Pull-Providers (Tasmota)**: Blocks requests until the `throttle` interval has passed.
-    - **Push-Providers (MQTT/Serial)**: Blocks until a brand-new value arrives from the source ("Long Polling").
+    - **Push-Providers (MQTT/Serial)**: Sends fresh value or drops package.
 - **Error Resilience (Configurable)**: Can optionally return 0W if a fetch fails using the `zero_fallback` option to stabilize the battery's control loop.
 - **High Performance**: Optimized JSON parsing using `gjson` and zero-allocation byte-level processing for Serial data.
 - **Structured Logging**: Configurable log levels (`debug`, `info`, `warn`, `error`) using Go's modern `slog` package.

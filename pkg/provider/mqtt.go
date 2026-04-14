@@ -1,26 +1,26 @@
 package provider
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
+	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/tidwall/gjson"
 )
 
-type mqttResult struct {
-	val float64
-	err error
-}
-
 // MqttProvider blocks GetPower calls until a new message is received from the broker.
 type MqttProvider struct {
 	client   mqtt.Client
 	topic    string
 	jsonPath string
-	dataCh   chan mqttResult
+
+	mu      sync.Mutex
+	lastVal float64
+	isFresh bool
 }
 
 // NewMqttProvider initializes the MQTT client and the signaling channel.
@@ -28,7 +28,6 @@ func NewMqttProvider(broker string, port int, topic, user, password, jsonPath st
 	p := &MqttProvider{
 		topic:    topic,
 		jsonPath: jsonPath,
-		dataCh:   make(chan mqttResult),
 	}
 
 	opts := mqtt.NewClientOptions()
@@ -76,21 +75,22 @@ func (p *MqttProvider) onMessage(_ mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// Non-blocking send: if no one is calling GetPower, the message is dropped
-	// to ensure the next caller always gets the freshest possible data.
-	select {
-	case p.dataCh <- mqttResult{val: val, err: nil}:
-		slog.Debug("MQTT message forwarded to consumer", "value", val)
-	default:
-		// Buffer is full or no listener, drop old value
-	}
+	// Refresh Value
+	p.mu.Lock()
+	p.lastVal = val
+	p.isFresh = true
+	p.mu.Unlock()
 }
 
-// GetPower blocks until the next MQTT message arrives on the subscribed topic.
+// GetPower sends fresh value or returns stale data
 func (p *MqttProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err error) {
-	res := <-p.dataCh
-	if res.err != nil {
-		return 0, 0, 0, 0, res.err
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if !p.isFresh {
+		return 0, 0, 0, 0, errors.New("stale data: wait for new MQTT update")
 	}
-	return res.val, 0, 0, res.val, nil
+
+	p.isFresh = false
+	return p.lastVal, 0, 0, p.lastVal, nil
 }
