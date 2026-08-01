@@ -33,10 +33,12 @@ func main() {
 	multiProvider := setupProviders(ctx, cfg)
 	handler := setupHandler(cfg)
 
-	startServers(ctx, handler, multiProvider)
+	wg := startServers(ctx, handler, multiProvider)
 
 	<-ctx.Done()
 	slog.Info("Shutting down...")
+	wg.Wait()
+	slog.Info("Shutdown complete.")
 }
 
 func setupLogging(level string) {
@@ -172,7 +174,7 @@ func setupHandler(cfg config.Config) emulator.DeviceHandler {
 	return handler
 }
 
-func startServers(ctx context.Context, handler emulator.DeviceHandler, p provider.PowerProvider) {
+func startServers(ctx context.Context, handler emulator.DeviceHandler, p provider.PowerProvider) *sync.WaitGroup {
 	var wg sync.WaitGroup
 	ports := []int{1010, 2220}
 	for _, port := range ports {
@@ -193,10 +195,5 @@ func startServers(ctx context.Context, handler emulator.DeviceHandler, p provide
 
 	slog.Info("B2500 emulator running. Switch the Marstek battery to 'Auto' mode.", "ports", ports)
 
-	go func() {
-		<-ctx.Done()
-		slog.Info("Shutting down servers...")
-		wg.Wait()
-		slog.Info("Shutdown complete.")
-	}()
+	return &wg
 }

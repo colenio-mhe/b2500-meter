@@ -135,5 +135,5 @@ func (s *SerialProvider) GetPower() (phaseA, phaseB, phaseC, total float64, err 
 	}
 
 	s.isFresh = false
-	return 0, 0, 0, s.lastVal, nil
+	return s.lastVal, 0, 0, s.lastVal, nil
 }

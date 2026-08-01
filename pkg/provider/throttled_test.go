@@ -75,6 +75,36 @@ func TestThrottledProvider(t *testing.T) {
 		}
 	})
 
+	t.Run("Context cancellation aborts pending wait", func(t *testing.T) {
+		base := &counterProvider{}
+		interval := 5 * time.Second
+		ctx, cancel := context.WithCancel(t.Context())
+
+		tp := NewThrottledProvider(ctx, base, interval)
+
+		// First call is immediate and starts the throttle window
+		if _, _, _, _, err := tp.GetPower(); err != nil {
+			t.Fatal(err)
+		}
+
+		// Cancel while the second call would have to wait for the interval
+		cancel()
+
+		start := time.Now()
+		_, _, _, _, err := tp.GetPower()
+		elapsed := time.Since(start)
+
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+		if elapsed > time.Second {
+			t.Errorf("expected canceled call to return quickly, but took %v", elapsed)
+		}
+		if atomic.LoadInt32(&base.calls) != 1 {
+			t.Errorf("expected base provider not to be called after cancellation, got %d calls", atomic.LoadInt32(&base.calls))
+		}
+	})
+
 	t.Run("Error propagation", func(t *testing.T) {
 		mockErr := fmt.Errorf("provider failure")
 		base := &customProvider{

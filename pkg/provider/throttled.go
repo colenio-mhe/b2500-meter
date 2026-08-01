@@ -11,6 +11,7 @@ import (
 // It ensures the underlying source is not accessed more frequently than the specified interval
 // by blocking the caller until the interval has elapsed.
 type ThrottledProvider struct {
+	ctx       context.Context
 	wrapped   PowerProvider
 	interval  time.Duration
 	mu        sync.Mutex
@@ -18,8 +19,10 @@ type ThrottledProvider struct {
 }
 
 // NewThrottledProvider initializes a ThrottledProvider with the given interval.
+// The context is used to abort a pending wait when the application shuts down.
 func NewThrottledProvider(ctx context.Context, wrapped PowerProvider, interval time.Duration) *ThrottledProvider {
 	return &ThrottledProvider{
+		ctx:      ctx,
 		wrapped:  wrapped,
 		interval: interval,
 	}
@@ -35,9 +38,15 @@ func (t *ThrottledProvider) GetPower() (phaseA, phaseB, phaseC, total float64, e
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	elapsed := time.Since(t.lastFetch)
-	if elapsed < t.interval {
-		time.Sleep(t.interval - elapsed)
+	if wait := t.interval - time.Since(t.lastFetch); wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+		case <-t.ctx.Done():
+			return 0, 0, 0, 0, t.ctx.Err()
+		}
 	}
 
 	a, b, c, tot, err := t.wrapped.GetPower()

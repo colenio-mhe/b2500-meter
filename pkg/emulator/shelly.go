@@ -62,11 +62,11 @@ func (h *ShellyPro3EMHandler) Handle(req api.RpcRequest, p provider.PowerProvide
 			AActPower:     h.round(pA),
 			BActPower:     h.round(pB),
 			CActPower:     h.round(pC),
-			TotalActPower: h.roundTotal(total),
+			TotalActPower: h.round(total),
 		}
 	case "EM1.GetStatus":
 		result = api.Em1StatusResponse{
-			ActPower: h.roundTotal(total),
+			ActPower: h.round(total),
 		}
 	default:
 		return nil, false
@@ -80,34 +80,16 @@ func (h *ShellyPro3EMHandler) Handle(req api.RpcRequest, p provider.PowerProvide
 	}, true
 }
 
-// round applies rounding and decimal point enforcement
-// This ensures that integer values are represented as floats in the JSON response (e.g., 200.001).
-func (h *ShellyPro3EMHandler) round(power float64) float64 {
-	const decimalPointEnforcer = 0.001
+// round rounds a power value to one decimal place, matching the precision of a real
+// Shelly Pro 3EM. The decimal point in the JSON output is guaranteed by api.JsonFloat,
+// so no value distortion is needed.
+func (h *ShellyPro3EMHandler) round(power float64) api.JsonFloat {
+	rounded := math.Round(power*10) / 10
 
-	// Special case for very small values around the zero line
-	if math.Abs(power) < 0.1 {
-		return decimalPointEnforcer
+	// Normalize negative zero so the response never contains "-0.0".
+	if rounded == 0 {
+		rounded = 0
 	}
 
-	val := math.Round(power*10) / 10
-
-	if val == math.Round(val) {
-		val += decimalPointEnforcer
-	}
-
-	return val
-}
-
-// roundTotal applies the rounding logic to the total power value.
-func (h *ShellyPro3EMHandler) roundTotal(total float64) float64 {
-	const decimalPointEnforcer = 0.001
-
-	rounded := math.Round(total*1000) / 1000
-
-	if rounded == math.Round(rounded) || rounded == 0 {
-		return rounded + decimalPointEnforcer
-	}
-
-	return rounded
+	return api.JsonFloat(rounded)
 }

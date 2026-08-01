@@ -32,7 +32,7 @@ func NewMqttProvider(broker string, port int, topic, user, password, jsonPath st
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", broker, port))
-	if user != "" && password != "" {
+	if user != "" {
 		opts.SetUsername(user)
 		opts.SetPassword(password)
 	}

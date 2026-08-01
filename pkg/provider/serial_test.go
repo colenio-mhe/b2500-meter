@@ -20,12 +20,15 @@ func TestSerialProvider_Flow(t *testing.T) {
 		s.mu.Unlock()
 
 		// First call should return the fresh value
-		_, _, _, total, err := s.GetPower()
+		phaseA, _, _, total, err := s.GetPower()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if total != 500.0 {
-			t.Errorf("expected 500, got %f", total)
+			t.Errorf("expected total 500, got %f", total)
+		}
+		if phaseA != 500.0 {
+			t.Errorf("expected phase A 500, got %f", phaseA)
 		}
 
 		// Second call immediately after should fail because the data is now stale
